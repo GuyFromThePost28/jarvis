@@ -1,5 +1,5 @@
 """
-JARVIS Action Executor — AppleScript-based system actions.
+Vader Action Executor — AppleScript-based system actions.
 
 Execute actions IMMEDIATELY, before generating any LLM response.
 Each function returns {"success": bool, "confirmation": str}.
@@ -14,15 +14,15 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-log = logging.getLogger("jarvis.actions")
+log = logging.getLogger("vader.actions")
 
 DESKTOP_PATH = Path.home() / "Desktop"
 
 
-async def _mark_terminal_as_jarvis(revert_after: float = 5.0):
+async def _mark_terminal_as_vader(revert_after: float = 5.0):
     """Temporarily set the front Terminal window to Ocean theme, then revert.
 
-    Shows the user JARVIS is active in that terminal. Reverts after revert_after seconds.
+    Shows the user Vader is active in that terminal. Reverts after revert_after seconds.
     """
     # Save the current profile, switch to Ocean, then revert
     script_save = (
@@ -82,7 +82,7 @@ async def _revert_terminal_theme(profile_name: str):
 
 
 async def open_terminal(command: str = "") -> dict:
-    """Open Terminal.app and optionally run a command. Marks it blue for JARVIS."""
+    """Open Terminal.app and optionally run a command. Marks it blue for Vader."""
     if command:
         escaped = command.replace('"', '\\"')
         script = (
@@ -107,7 +107,7 @@ async def open_terminal(command: str = "") -> dict:
     if not success:
         log.error(f"open_terminal failed: {stderr.decode()}")
     else:
-        await _mark_terminal_as_jarvis()
+        await _mark_terminal_as_vader()
     return {
         "success": success,
         "confirmation": "Terminal is open, sir." if success else "I had trouble opening Terminal, sir.",
@@ -183,7 +183,7 @@ async def open_claude_in_project(project_dir: str, prompt: str) -> dict:
     if not success:
         log.error(f"open_claude_in_project failed: {stderr.decode()}")
     else:
-        await _mark_terminal_as_jarvis()
+        await _mark_terminal_as_vader()
     return {
         "success": success,
         "confirmation": "Claude Code is running in Terminal, sir. You can watch the progress."
@@ -261,7 +261,7 @@ return "OK"
             log.error(f"prompt_existing_terminal failed: {stderr.decode()[:200]}")
 
         if success:
-            await _mark_terminal_as_jarvis()
+            await _mark_terminal_as_vader()
 
         return {
             "success": success,
@@ -307,7 +307,7 @@ async def monitor_build(project_dir: str, ws=None, synthesize_fn=None) -> None:
     """Monitor a Claude Code build for completion. Notify via WebSocket when done."""
     import base64
 
-    output_file = Path(project_dir) / ".jarvis_output.txt"
+    output_file = Path(project_dir) / ".vader_output.txt"
     start = time.time()
     timeout = 600  # 10 minutes
 
@@ -315,7 +315,7 @@ async def monitor_build(project_dir: str, ws=None, synthesize_fn=None) -> None:
         await asyncio.sleep(5)
         if output_file.exists():
             content = output_file.read_text()
-            if "--- JARVIS TASK COMPLETE ---" in content:
+            if "--- VADER TASK COMPLETE ---" in content:
                 log.info(f"Build complete in {project_dir}")
                 if ws and synthesize_fn:
                     try:
@@ -405,4 +405,4 @@ def _generate_project_name(prompt: str) -> str:
             "on", "desktop", "that", "application", "app", "full", "stack", "simple",
             "web", "page", "site", "named"}
     meaningful = [w for w in words if w not in skip and len(w) > 2][:4]
-    return "-".join(meaningful) if meaningful else "jarvis-project"
+    return "-".join(meaningful) if meaningful else "vader-project"

@@ -1,5 +1,5 @@
 """
-JARVIS Prompt Templates — Structured prompts for Claude Code tasks.
+Vader Prompt Templates — Structured prompts for Claude Code tasks.
 
 Each template is a format string with named placeholders.
 Templates are matched by task type and optionally by keyword analysis.

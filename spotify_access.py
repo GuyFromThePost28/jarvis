@@ -1,11 +1,11 @@
 """
-JARVIS Spotify Access — control Spotify on Mac via AppleScript.
+Vader Spotify Access — control Spotify on Mac via AppleScript.
 """
 from __future__ import annotations
 import asyncio
 import logging
 
-log = logging.getLogger("jarvis.spotify")
+log = logging.getLogger("vader.spotify")
 
 
 async def _run_spotify_script(script: str) -> str:

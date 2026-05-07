@@ -1,5 +1,5 @@
 """
-JARVIS Alarm & Clock Access — set alarms and timers via macOS Reminders and system tools.
+Vader Alarm & Clock Access — set alarms and timers via macOS Reminders and system tools.
 """
 from __future__ import annotations
 import asyncio
@@ -7,7 +7,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 
-log = logging.getLogger("jarvis.alarm")
+log = logging.getLogger("vader.alarm")
 
 
 async def _run_script(script: str) -> str:

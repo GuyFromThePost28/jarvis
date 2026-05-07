@@ -1,5 +1,5 @@
 """
-Browser integration tests for JARVIS.
+Browser integration tests for Vader.
 
 Exercises the browser pipeline: search, visit, screenshot.
 Skips if no network or Playwright browsers not installed.
@@ -106,7 +106,7 @@ async def test_browser_visit_invalid_url(browser):
 @pytest.mark.skipif(not NETWORK_AVAILABLE, reason=SKIP_REASON)
 async def test_browser_screenshot(browser):
     """Screenshot produces a valid PNG file."""
-    tmp_path = tempfile.mktemp(suffix=".png", prefix="jarvis_test_ss_")
+    tmp_path = tempfile.mktemp(suffix=".png", prefix="vader_test_ss_")
 
     try:
         result_path = await browser.screenshot("https://example.com", path=tmp_path)

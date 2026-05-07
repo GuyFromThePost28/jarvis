@@ -58,7 +58,7 @@ from dispatch_registry import DispatchRegistry
 from planner import TaskPlanner, detect_planning_mode, BYPASS_PHRASES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
-log = logging.getLogger("jarvis")
+log = logging.getLogger("vader")
 
 # ---------------------------------------------------------------------------
 # Config
@@ -66,14 +66,14 @@ log = logging.getLogger("jarvis")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 FISH_API_KEY = os.getenv("FISH_API_KEY", "")
-FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # JARVIS (MCU)
+FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # Vader (MCU)
 FISH_API_URL = "https://api.fish.audio/v1/tts"
 USER_NAME = os.getenv("USER_NAME", "sir")
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DESKTOP_PATH = Path.home() / "Desktop"
 
-JARVIS_SYSTEM_PROMPT = """\
+VADER_SYSTEM_PROMPT = """\
 You are Vader — {user_name}'s personal AI assistant. Dark, commanding, and utterly precise. You serve without question and execute without hesitation.
 
 VOICE & PERSONALITY:
@@ -100,7 +100,7 @@ CONVERSATION STYLE:
 - When you don't know something: "I do not have that information, sir" — state it plainly
 
 SELF-AWARENESS:
-You ARE the Vader project at {project_dir} on {user_name}'s computer. Your code is Python (FastAPI server, WebSocket voice, Fish Audio TTS, Anthropic API). You were built by {user_name}. If asked about yourself, your code, how you work, or your line count — use [ACTION:PROMPT_PROJECT] to check the jarvis project. You have full access to your own source code.
+You ARE the Vader project at {project_dir} on {user_name}'s computer. Your code is Python (FastAPI server, WebSocket voice, Fish Audio TTS, Anthropic API). You were built by {user_name}. If asked about yourself, your code, how you work, or your line count — use [ACTION:PROMPT_PROJECT] to check the vader project. You have full access to your own source code.
 
 YOUR CAPABILITIES (these are REAL and ACTIVE — you CAN do all of these RIGHT NOW):
 - You CAN open Terminal.app via AppleScript
@@ -206,7 +206,7 @@ CRITICAL: When the user asks about their SCREEN, what's RUNNING, or what they're
 - [ACTION:REMEMBER] content — store an important fact about the user for future context.
   "I prefer React over Vue" → [ACTION:REMEMBER] User prefers React over Vue for frontend projects
 - [ACTION:CREATE_NOTE] title ||| body — create a new Apple Note. For saving plans, ideas, lists.
-  "save that as a note" → [ACTION:CREATE_NOTE] Day Plan March 19 ||| Morning: client calls. Afternoon: TikTok dashboard. Evening: JARVIS improvements.
+  "save that as a note" → [ACTION:CREATE_NOTE] Day Plan March 19 ||| Morning: client calls. Afternoon: TikTok dashboard. Evening: Vader improvements.
 - [ACTION:READ_NOTE] title search — read an existing Apple Note by title keyword.
 - [ACTION:SPOTIFY_PLAY] song or artist — play a song on Spotify. "play Drake" → [ACTION:SPOTIFY_PLAY] Drake
 - [ACTION:SPOTIFY_PAUSE] — pause or resume Spotify playback
@@ -387,7 +387,7 @@ class ClaudeTaskManager:
         # Take first 3-4 meaningful words
         skip = {"a", "the", "an", "me", "build", "create", "make", "for", "with", "and", "to", "of"}
         meaningful = [w for w in words if w not in skip][:4]
-        name = "-".join(meaningful) if meaningful else "jarvis-project"
+        name = "-".join(meaningful) if meaningful else "vader-project"
         return name
 
     async def _run_task(self, task: ClaudeTask):
@@ -405,14 +405,14 @@ class ClaudeTaskManager:
             task.working_dir = work_dir
 
         # Write the prompt to a temp file so we can pipe it to claude
-        prompt_file = Path(work_dir) / ".jarvis_prompt.md"
+        prompt_file = Path(work_dir) / ".vader_prompt.md"
         prompt_file.write_text(task.prompt)
 
         # Open Terminal.app with claude running in the project directory
         applescript = f'''
         tell application "Terminal"
             activate
-            set newTab to do script "cd {work_dir} && cat .jarvis_prompt.md | claude -p --dangerously-skip-permissions | tee .jarvis_output.txt; echo '\\n--- JARVIS TASK COMPLETE ---'"
+            set newTab to do script "cd {work_dir} && cat .vader_prompt.md | claude -p --dangerously-skip-permissions | tee .vader_output.txt; echo '\\n--- VADER TASK COMPLETE ---'"
         end tell
         '''
 
@@ -425,7 +425,7 @@ class ClaudeTaskManager:
         task.pid = process.pid
 
         # Monitor the output file for completion
-        output_file = Path(work_dir) / ".jarvis_output.txt"
+        output_file = Path(work_dir) / ".vader_output.txt"
         start = time.time()
         timeout = 600  # 10 minutes
 
@@ -433,8 +433,8 @@ class ClaudeTaskManager:
             await asyncio.sleep(5)
             if output_file.exists():
                 content = output_file.read_text()
-                if "--- JARVIS TASK COMPLETE ---" in content or len(content) > 100:
-                    task.result = content.replace("--- JARVIS TASK COMPLETE ---", "").strip()
+                if "--- VADER TASK COMPLETE ---" in content or len(content) > 100:
+                    task.result = content.replace("--- VADER TASK COMPLETE ---", "").strip()
                     task.status = "completed"
                     break
         else:
@@ -925,7 +925,7 @@ async def _execute_research(target: str, ws=None):
                     await ws.send_json({"type": "status", "state": "speaking"})
                     await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": notify_text})
                     await ws.send_json({"type": "status", "state": "idle"})
-                    log.info(f"JARVIS: {notify_text}")
+                    log.info(f"Vader: {notify_text}")
             except Exception:
                 pass  # WebSocket might be gone
 
@@ -1072,7 +1072,7 @@ async def _execute_prompt_project(project_name: str, prompt: str, work_session: 
         log.info(f"Dispatch summary for {project_name}: {msg[:100]}")
         if voice_state and time.time() - voice_state["last_user_time"] < 3:
             log.info(f"Skipping dispatch audio for {project_name} — user spoke recently")
-            # Result is still stored in history below so JARVIS can reference it
+            # Result is still stored in history below so Vader can reference it
         else:
             audio = await synthesize_speech(strip_markdown_for_tts(msg))
             if ws:
@@ -1087,7 +1087,7 @@ async def _execute_prompt_project(project_name: str, prompt: str, work_session: 
                 except Exception as e:
                     log.error(f"Dispatch audio send failed: {e}")
 
-        # Store dispatch result in conversation history so JARVIS remembers it
+        # Store dispatch result in conversation history so Vader remembers it
         if history is not None:
             history.append({"role": "assistant", "content": f"[Dispatch result for {project_name}]: {msg}"})
 
@@ -1131,7 +1131,7 @@ async def self_work_and_notify(session: WorkSession, prompt: str, ws):
                     await ws.send_json({"type": "status", "state": "speaking"})
                     await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": msg})
                     await ws.send_json({"type": "status", "state": "idle"})
-                    log.info(f"JARVIS: {msg}")
+                    log.info(f"Vader: {msg}")
             except Exception:
                 pass
     except Exception as e:
@@ -1206,7 +1206,7 @@ async def generate_response(
     # Check if any lookups are in progress
     lookup_status = get_lookup_status()
 
-    system = JARVIS_SYSTEM_PROMPT.format(
+    system = Vader_SYSTEM_PROMPT.format(
         current_time=current_time,
         weather_info=weather_info,
         screen_context=screen_ctx or "Not checked yet.",
@@ -1230,7 +1230,7 @@ async def generate_response(
     if session_summary:
         system += f"\n\nSESSION CONTEXT (earlier in this conversation):\n{session_summary}"
 
-    # Self-awareness — remind JARVIS of last response to avoid repetition
+    # Self-awareness — remind Vader of last response to avoid repetition
     if last_response:
         system += f'\n\nYOUR LAST RESPONSE (do not repeat this):\n"{last_response[:150]}"'
 
@@ -1445,7 +1445,7 @@ async def lifespan(application: FastAPI):
 
     # Start context refresh in a separate thread (never touches event loop)
     _refresh_context_sync()
-    log.info("JARVIS server starting")
+    log.info("Vader server starting")
 
     yield
 
@@ -1648,13 +1648,13 @@ async def handle_build(target: str) -> str:
 
     # Write prompt to a file, then pipe it to claude -p
     # This avoids all shell escaping issues
-    prompt_file = Path(path) / ".jarvis_prompt.txt"
+    prompt_file = Path(path) / ".vader_prompt.txt"
     prompt_file.write_text(target)
 
     script = (
         'tell application "Terminal"\n'
         "    activate\n"
-        f'    do script "cd {path} && cat .jarvis_prompt.txt | claude -p --dangerously-skip-permissions"\n'
+        f'    do script "cd {path} && cat .vader_prompt.txt | claude -p --dangerously-skip-permissions"\n'
         "end tell"
     )
     await asyncio.create_subprocess_exec(
@@ -1696,7 +1696,7 @@ async def handle_show_recent() -> str:
 # Background lookup system — spawns slow tasks, reports back via voice
 # ---------------------------------------------------------------------------
 
-# Track active lookups so JARVIS can report status
+# Track active lookups so Vader can report status
 _active_lookups: dict[str, dict] = {}  # id -> {"type": str, "status": str, "started": float}
 
 
@@ -1747,7 +1747,7 @@ async def _lookup_and_report(lookup_type: str, lookup_fn, ws, history: list[dict
             try: await ws.send_json({"type": "node_activate", "node": node_map[lookup_type]})
             except Exception: pass
 
-        # Store lookup result in conversation history so JARVIS remembers it
+        # Store lookup result in conversation history so Vader remembers it
         if history is not None:
             history.append({"role": "assistant", "content": f"[{lookup_type} check]: {result_text}"})
 
@@ -1920,10 +1920,10 @@ blockquote {{ border-left: 3px solid #0ea5e9; margin-left: 0; padding-left: 16px
 <h1>Research: {_html.escape(target[:80])}</h1>
 <div>{research_text.replace(chr(10), '<br>')}</div>
 <hr style="border-color:#222;margin-top:40px">
-<p style="color:#555;font-size:0.8em">Researched by JARVIS using Claude Opus &bull; {datetime.now().strftime('%B %d, %Y %I:%M %p')}</p>
+<p style="color:#555;font-size:0.8em">Researched by Vader using Claude Opus &bull; {datetime.now().strftime('%B %d, %Y %I:%M %p')}</p>
 </body></html>"""
 
-        results_file = Path.home() / "Desktop" / ".jarvis_research.html"
+        results_file = Path.home() / "Desktop" / ".vader_research.html"
         results_file.write_text(html_content)
 
         browser_name = "firefox" if "firefox" in text.lower() else "chrome"
@@ -2004,7 +2004,7 @@ async def voice_handler(ws: WebSocket):
     voice_state = {"last_user_time": 0.0}
 
     # Self-awareness — track last spoken response to avoid repetition
-    last_jarvis_response = ""
+    last_vader_response = ""
 
     # Three-tier conversation memory
     session_buffer: list[dict] = []  # ALL messages, never truncated
@@ -2039,7 +2039,7 @@ async def voice_handler(ws: WebSocket):
                         await ws.send_json({"type": "status", "state": "speaking"})
                         await ws.send_json({"type": "audio", "data": encoded, "text": greeting})
                         history.append({"role": "assistant", "content": greeting})
-                        log.info(f"JARVIS: {greeting}")
+                        log.info(f"Vader: {greeting}")
                         await ws.send_json({"type": "status", "state": "idle"})
                 except Exception as e:
                     log.warning(f"Greeting failed: {e}")
@@ -2058,10 +2058,10 @@ async def voice_handler(ws: WebSocket):
             except json.JSONDecodeError:
                 continue
 
-            # ── Fix-self: activate work mode in JARVIS repo ──
+            # ── Fix-self: activate work mode in Vader repo ──
             if msg.get("type") == "fix_self":
-                jarvis_dir = str(Path(__file__).parent)
-                await work_session.start(jarvis_dir)
+                vader_dir = str(Path(__file__).parent)
+                await work_session.start(vader_dir)
                 response_text = "Work mode active in my own repo, sir. Tell me what needs fixing."
                 tts = strip_markdown_for_tts(response_text)
                 await ws.send_json({"type": "status", "state": "speaking"})
@@ -2159,14 +2159,14 @@ async def voice_handler(ws: WebSocket):
                     else:
                         response_text = "Already in conversation mode, sir."
 
-                # ── WORK MODE: speech → claude -p → Haiku summary → JARVIS voice ──
+                # ── WORK MODE: speech → claude -p → Haiku summary → Vader voice ──
                 elif work_session.active:
                     if is_casual_question(user_text):
                         # Quick chat — bypass claude -p, use Haiku
                         response_text = await generate_response(
                             user_text, anthropic_client, task_manager,
                             cached_projects, history,
-                            last_response=last_jarvis_response,
+                            last_response=last_vader_response,
                             session_summary=session_summary,
                         )
                     else:
@@ -2270,7 +2270,7 @@ async def voice_handler(ws: WebSocket):
                             response_text = await generate_response(
                                 user_text, anthropic_client, task_manager,
                                 cached_projects, history,
-                                last_response=last_jarvis_response,
+                                last_response=last_vader_response,
                                 session_summary=session_summary,
                             )
 
@@ -2485,8 +2485,8 @@ async def voice_handler(ws: WebSocket):
                 else:
                     await ws.send_json({"type": "text", "text": response_text})
                     await ws.send_json({"type": "status", "state": "idle"})
-                log.info(f"JARVIS: {response_text}")
-                last_jarvis_response = response_text
+                log.info(f"Vader: {response_text}")
+                last_vader_response = response_text
 
             except Exception as e:
                 log.error(f"Error: {e}", exc_info=True)
@@ -2679,13 +2679,13 @@ async def api_restart():
 @app.post("/api/fix-self")
 async def api_fix_self():
     """Enter work mode in the Vader repo — Vader can now fix himself."""
-    jarvis_dir = str(Path(__file__).parent)
+    vader_dir = str(Path(__file__).parent)
     # The work_session is per-WebSocket, so we set a flag that the handler picks up
     # For now, also open Terminal so user can see
     script = (
         'tell application "Terminal"\n'
         '    activate\n'
-        f'    do script "cd {jarvis_dir} && claude --dangerously-skip-permissions"\n'
+        f'    do script "cd {vader_dir} && claude --dangerously-skip-permissions"\n'
         'end tell'
     )
     await asyncio.create_subprocess_exec(
@@ -2693,8 +2693,8 @@ async def api_fix_self():
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    log.info("Work mode: JARVIS repo opened for self-improvement")
-    return {"status": "work_mode_active", "path": jarvis_dir}
+    log.info("Work mode: Vader repo opened for self-improvement")
+    return {"status": "work_mode_active", "path": vader_dir}
 
 
 # ---------------------------------------------------------------------------
@@ -2738,7 +2738,7 @@ if __name__ == "__main__":
     ws_proto = "wss" if use_ssl else "ws"
 
     print()
-    print("  J.A.R.V.I.S. Server v0.1.0")
+    print("  Vader Server v0.1.0")
     print(f"  WebSocket: {ws_proto}://{args.host}:{args.port}/ws/voice")
     print(f"  REST API:  {proto}://{args.host}:{args.port}/api/")
     print(f"  Tasks:     {proto}://{args.host}:{args.port}/api/tasks")

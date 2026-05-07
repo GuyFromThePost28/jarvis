@@ -1,5 +1,5 @@
 """
-JARVIS Apple Notes Access — READ + CREATE ONLY.
+Vader Apple Notes Access — READ + CREATE ONLY.
 
 Can read existing notes and create new ones.
 CANNOT edit or delete existing notes (safety).
@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-log = logging.getLogger("jarvis.notes")
+log = logging.getLogger("vader.notes")
 
 
 async def _run_notes_script(script: str, timeout: float = 10) -> str:

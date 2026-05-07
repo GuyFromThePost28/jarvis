@@ -1,5 +1,5 @@
 """
-JARVIS Bambu Lab Integration — monitor and control Bambu 3D printers.
+Vader Bambu Lab Integration — monitor and control Bambu 3D printers.
 
 Uses the Bambu Lab local MQTT API over your home network.
 Requires: BAMBU_PRINTER_IP, BAMBU_SERIAL, BAMBU_ACCESS_CODE in .env
@@ -10,7 +10,7 @@ import json
 import logging
 import os
 
-log = logging.getLogger("jarvis.bambu")
+log = logging.getLogger("vader.bambu")
 
 PRINTER_IP = os.getenv("BAMBU_PRINTER_IP", "")
 SERIAL = os.getenv("BAMBU_SERIAL", "")
