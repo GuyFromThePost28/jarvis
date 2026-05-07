@@ -28,13 +28,13 @@ interface LiveNode {
 
 // Node descriptions shown in the info panel
 const NODE_INFO: Record<string, { icon: string; desc: string; color: number }> = {
-  calendar:  { icon: "📅", desc: "Apple Calendar — reads your events and schedule.", color: 0x4488ff },
-  mail:      { icon: "✉️", desc: "Apple Mail — read-only access to your inbox.", color: 0x44aaff },
-  memory:    { icon: "🧠", desc: "Long-term memory — facts Vader has learned about you.", color: 0xaa44ff },
-  spotify:   { icon: "🎵", desc: "Spotify — play, pause, skip, volume control.", color: 0x1db954 },
-  bambu:     { icon: "🖨️", desc: "Bambu Lab printer — monitor and control prints.", color: 0xff6622 },
-  screen:    { icon: "🖥️", desc: "Screen awareness — Vader can see your open apps.", color: 0x22ddaa },
-  claude:    { icon: "⚡", desc: "Claude Code — spawns dev tasks in your projects.", color: 0xffaa00 },
+  calendar:  { icon: "📅", desc: "Apple Calendar — reads your events and schedule.", color: 0x00aaff },
+  mail:      { icon: "✉️", desc: "Apple Mail — read-only access to your inbox.", color: 0x00ffee },
+  memory:    { icon: "🧠", desc: "Long-term memory — facts Vader has learned about you.", color: 0xcc00ff },
+  spotify:   { icon: "🎵", desc: "Spotify — play, pause, skip, volume control.", color: 0x00ff66 },
+  bambu:     { icon: "🖨️", desc: "Bambu Lab printer — monitor and control prints.", color: 0xff3300 },
+  screen:    { icon: "🖥️", desc: "Screen awareness — Vader can see your open apps.", color: 0x00ffcc },
+  claude:    { icon: "⚡", desc: "Claude Code — spawns dev tasks in your projects.", color: 0xffee00 },
 };
 
 function makeLabel(label: string, color: number): THREE.Sprite {
@@ -224,28 +224,28 @@ export class BrainMap {
     const color = info.color;
 
     // Node sphere
-    const geo = new THREE.SphereGeometry(3.5, 16, 16);
-    const nodeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: animate ? 0 : 0.7, blending: THREE.AdditiveBlending });
+    const geo = new THREE.SphereGeometry(5, 20, 20);
+    const nodeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: animate ? 0 : 0.95, blending: THREE.AdditiveBlending });
     const mesh = new THREE.Mesh(geo, nodeMat);
     mesh.position.set(def.x, def.y, def.z);
     this.scene.add(mesh);
 
     // Outer glow ring
-    const glowGeo = new THREE.SphereGeometry(5.5, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: animate ? 0 : 0.08, blending: THREE.AdditiveBlending, side: THREE.BackSide });
+    const glowGeo = new THREE.SphereGeometry(9, 20, 20);
+    const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: animate ? 0 : 0.35, blending: THREE.AdditiveBlending, side: THREE.BackSide });
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.position.copy(mesh.position);
     this.scene.add(glow);
 
     // Label
     const sprite = makeLabel(def.label, color);
-    sprite.position.set(def.x, def.y + 7, def.z);
+    sprite.position.set(def.x, def.y + 10, def.z);
     this.scene.add(sprite);
 
     // Line from center to node
     const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(def.x, def.y, def.z)];
     const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-    const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending });
+    const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
     this.scene.add(new THREE.Line(lineGeo, lineMat));
 
     const liveNode: LiveNode = { def, mesh, sprite, glow, lastActivated: 0, activationCount: 0 };
@@ -256,8 +256,8 @@ export class BrainMap {
       let progress = 0;
       const grow = () => {
         progress = Math.min(1, progress + 0.02);
-        (mesh.material as THREE.MeshBasicMaterial).opacity = progress * 0.7;
-        (glow.material as THREE.MeshBasicMaterial).opacity = progress * 0.08;
+        (mesh.material as THREE.MeshBasicMaterial).opacity = progress * 0.95;
+        (glow.material as THREE.MeshBasicMaterial).opacity = progress * 0.35;
         const spriteMat = sprite.material as THREE.SpriteMaterial;
         spriteMat.opacity = progress;
         mesh.scale.setScalar(0.1 + progress * 0.9);
@@ -277,11 +277,11 @@ export class BrainMap {
     for (const [, n] of this.nodes) {
       const age = Date.now() / 1000 - n.lastActivated;
       const recentActivation = Math.max(0, 1 - age / 5);
-      const pulse = Math.sin(t * 2 + n.def.x) * 0.03;
+      const pulse = Math.sin(t * 2 + n.def.x) * 0.08;
       const glowMat = n.glow.material as THREE.MeshBasicMaterial;
-      glowMat.opacity = 0.06 + pulse + recentActivation * 0.25;
+      glowMat.opacity = 0.28 + pulse + recentActivation * 0.35;
       const nodeMat = n.mesh.material as THREE.MeshBasicMaterial;
-      nodeMat.opacity = 0.5 + pulse * 2 + recentActivation * 0.4;
+      nodeMat.opacity = 0.85 + pulse * 1.5 + recentActivation * 0.15;
     }
 
     // Hover highlight
