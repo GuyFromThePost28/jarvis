@@ -1208,7 +1208,7 @@ async def generate_response(
     # Check if any lookups are in progress
     lookup_status = get_lookup_status()
 
-    system = Vader_SYSTEM_PROMPT.format(
+    system = VADER_SYSTEM_PROMPT.format(
         current_time=current_time,
         weather_info=weather_info,
         screen_context=screen_ctx or "Not checked yet.",
