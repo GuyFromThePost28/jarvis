@@ -35,6 +35,7 @@ const NODE_INFO: Record<string, { icon: string; desc: string; color: number }> =
   bambu:     { icon: "🖨️", desc: "Bambu Lab printer — monitor and control prints.", color: 0xff3300 },
   screen:    { icon: "🖥️", desc: "Screen awareness — Vader can see your open apps.", color: 0x00ffcc },
   claude:    { icon: "⚡", desc: "Claude Code — spawns dev tasks in your projects.", color: 0xffee00 },
+  obsidian:  { icon: "🔮", desc: "Obsidian vault — every memory and note Vader stores, visible as a knowledge graph.", color: 0x9b59b6 },
 };
 
 function makeLabel(label: string, color: number): THREE.Sprite {

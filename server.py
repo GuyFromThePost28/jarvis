@@ -54,6 +54,7 @@ from notes_access import get_recent_notes, read_note, search_notes_apple, create
 from spotify_access import get_current_track, play_track, play_pause, next_track, previous_track, set_volume, format_now_playing
 from alarm_access import set_alarm, set_timer, format_alarms_summary
 from bambu_access import format_printer_status, pause_print, resume_print, stop_print
+from obsidian_access import write_memory, write_note, read_vault
 from dispatch_registry import DispatchRegistry
 from planner import TaskPlanner, detect_planning_mode, BYPASS_PHRASES
 
@@ -208,6 +209,7 @@ CRITICAL: When the user asks about their SCREEN, what's RUNNING, or what they're
 - [ACTION:CREATE_NOTE] title ||| body — create a new Apple Note. For saving plans, ideas, lists.
   "save that as a note" → [ACTION:CREATE_NOTE] Day Plan March 19 ||| Morning: client calls. Afternoon: TikTok dashboard. Evening: Vader improvements.
 - [ACTION:READ_NOTE] title search — read an existing Apple Note by title keyword.
+- [ACTION:READ_VAULT] query — search the Obsidian knowledge vault for notes and memories matching the query. Use this when the user asks about something you might have noted previously.
 - [ACTION:SPOTIFY_PLAY] song or artist — play a song on Spotify. "play Drake" → [ACTION:SPOTIFY_PLAY] Drake
 - [ACTION:SPOTIFY_PAUSE] — pause or resume Spotify playback
 - [ACTION:SPOTIFY_NEXT] — skip to next track
@@ -755,7 +757,7 @@ def extract_action(response: str) -> tuple[str, dict | None]:
     Returns (clean_text_for_tts, action_dict_or_none).
     """
     match = _action_re.search(
-        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|SCREEN|SPOTIFY_PLAY|SPOTIFY_PAUSE|SPOTIFY_NEXT|SPOTIFY_PREV|SPOTIFY_VOLUME|SPOTIFY_NOW|SET_ALARM|SET_TIMER|BAMBU_STATUS|BAMBU_PAUSE|BAMBU_RESUME|BAMBU_STOP)\]\s*(.*?)$',
+        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|READ_VAULT|SCREEN|SPOTIFY_PLAY|SPOTIFY_PAUSE|SPOTIFY_NEXT|SPOTIFY_PREV|SPOTIFY_VOLUME|SPOTIFY_NOW|SET_ALARM|SET_TIMER|BAMBU_STATUS|BAMBU_PAUSE|BAMBU_RESUME|BAMBU_STOP)\]\s*(.*?)$',
         response, _action_re.DOTALL,
     )
     if match:
@@ -2365,9 +2367,12 @@ async def voice_handler(ws: WebSocket):
                                     target = embedded_action["target"]
                                     if "|||" in target:
                                         topic, _, content = target.partition("|||")
-                                        create_note(content=content.strip(), topic=topic.strip())
+                                        topic = topic.strip(); content = content.strip()
+                                        create_note(content=content, topic=topic)
+                                        write_note(title=topic, body=content, topic=topic)
                                     else:
                                         create_note(content=target)
+                                        write_note(title="Note", body=target)
                                     log.info(f"Note created")
                                 elif embedded_action["action"] == "complete_task":
                                     try:
@@ -2377,11 +2382,14 @@ async def voice_handler(ws: WebSocket):
                                     except ValueError:
                                         pass
                                 elif embedded_action["action"] == "remember":
-                                    remember(embedded_action["target"].strip(), mem_type="fact", importance=7)
-                                    log.info(f"Memory stored: {embedded_action['target'][:60]}")
+                                    content = embedded_action["target"].strip()
+                                    remember(content, mem_type="fact", importance=7)
+                                    write_memory(content, mem_type="fact", importance=7)
+                                    log.info(f"Memory stored: {content[:60]}")
                                     if ws:
                                         try:
                                             await ws.send_json({"type": "node_activate", "node": "memory"})
+                                            await ws.send_json({"type": "node_activate", "node": "obsidian"})
                                             await ws.send_json({"type": "memory_store"})
                                         except Exception: pass
                                 elif embedded_action["action"] == "create_note":
@@ -2410,6 +2418,18 @@ async def voice_handler(ws: WebSocket):
                                             except Exception:
                                                 pass
                                     asyncio.create_task(_read_and_report(embedded_action["target"].strip(), ws))
+                                elif embedded_action["action"] == "read_vault":
+                                    async def _vault_and_report(query, _ws):
+                                        result = read_vault(query)
+                                        audio = await synthesize_speech(strip_markdown_for_tts(result))
+                                        if audio and _ws:
+                                            try:
+                                                await _ws.send_json({"type": "status", "state": "speaking"})
+                                                await _ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": result})
+                                                await _ws.send_json({"type": "node_activate", "node": "obsidian"})
+                                            except Exception:
+                                                pass
+                                    asyncio.create_task(_vault_and_report(embedded_action["target"].strip(), ws))
 
                                 # --- Spotify ---
                                 elif embedded_action["action"] == "spotify_play":
