@@ -1468,6 +1468,18 @@ async def health():
     return {"status": "online", "name": "Vader", "version": "0.1.0"}
 
 
+@app.get("/api/nodes")
+async def get_nodes():
+    """Return current knowledge node definitions from nodes.json."""
+    nodes_path = Path(__file__).parent / "nodes.json"
+    try:
+        import json as _json
+        with open(nodes_path) as f:
+            return _json.load(f)
+    except Exception:
+        return []
+
+
 @app.get("/api/tts-test")
 async def tts_test():
     """Generate a test audio clip for debugging."""
@@ -2367,6 +2379,11 @@ async def voice_handler(ws: WebSocket):
                                 elif embedded_action["action"] == "remember":
                                     remember(embedded_action["target"].strip(), mem_type="fact", importance=7)
                                     log.info(f"Memory stored: {embedded_action['target'][:60]}")
+                                    if ws:
+                                        try:
+                                            await ws.send_json({"type": "node_activate", "node": "memory"})
+                                            await ws.send_json({"type": "memory_store"})
+                                        except Exception: pass
                                 elif embedded_action["action"] == "create_note":
                                     target = embedded_action["target"]
                                     if "|||" in target:

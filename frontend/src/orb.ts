@@ -1,8 +1,8 @@
 /**
- * Vader — Brain particle visualization with knowledge nodes.
+ * Vader — Brain particle visualization.
  *
- * Brain-shaped particle cloud (two lobes) with floating knowledge nodes.
- * Nodes light up when Vader accesses the corresponding system.
+ * Brain-shaped two-lobe particle cloud with audio reactivity.
+ * Knowledge nodes live in the separate Brain Map view (brainmap.ts).
  */
 
 import * as THREE from "three";
@@ -13,47 +13,8 @@ export interface Orb {
   setState(s: OrbState): void;
   setAnalyser(a: AnalyserNode | null): void;
   activateNode(nodeId: string): void;
+  memorySpark(): void;
   destroy(): void;
-}
-
-// Knowledge nodes — positioned around the brain
-const NODE_DEFS = [
-  { id: "calendar", label: "Calendar",    x: -24, y:  18, z:  4 },
-  { id: "mail",     label: "Mail",        x:  24, y:  18, z:  4 },
-  { id: "memory",   label: "Memory",      x:   0, y:  30, z:  0 },
-  { id: "spotify",  label: "Spotify",     x: -26, y: -10, z:  4 },
-  { id: "bambu",    label: "Bambu",       x:  26, y: -10, z:  4 },
-  { id: "screen",   label: "Screen",      x: -20, y: -22, z: -4 },
-  { id: "claude",   label: "Claude Code", x:  20, y: -22, z: -4 },
-] as const;
-
-interface NodeState {
-  def: typeof NODE_DEFS[number];
-  mesh: THREE.Mesh;
-  sprite: THREE.Sprite;
-  line: THREE.Line;
-  activation: number;   // 0–1, decays over time
-  activatedAt: number;  // clock time of last activation
-}
-
-function makeTextSprite(label: string): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256; canvas.height = 56;
-  const ctx = canvas.getContext("2d")!;
-  ctx.clearRect(0, 0, 256, 56);
-  ctx.fillStyle = "rgba(120, 210, 255, 0.9)";
-  ctx.font = "bold 21px 'Courier New', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, 128, 28);
-  const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({
-    map: tex, transparent: true,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(14, 3.2, 1);
-  return sprite;
 }
 
 export function createOrb(canvas: HTMLCanvasElement): Orb {
@@ -75,7 +36,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   const pos = new Float32Array(N * 3);
   const vel = new Float32Array(N * 3);
   const phase = new Float32Array(N);
-  const lobeSide = new Float32Array(N); // -1 = left lobe, +1 = right lobe
+  const lobeSide = new Float32Array(N);
 
   for (let i = 0; i < N; i++) {
     const lobe = Math.random() < 0.5 ? -1 : 1;
@@ -126,45 +87,27 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   const electrons = new THREE.Points(electronGeo, electronMat);
   scene.add(electrons);
 
+  // ── Memory sparks — persistent glowing dots that accumulate ──
+  const MAX_SPARKS = 50;
+  interface Spark { angle: number; radius: number; speed: number; y: number; }
+  const sparks: Spark[] = [];
+
+  const sparkGeo = new THREE.BufferGeometry();
+  const sparkPos = new Float32Array(MAX_SPARKS * 3);
+  sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPos, 3));
+  sparkGeo.setDrawRange(0, 0);
+
+  const sparkMat = new THREE.PointsMaterial({
+    color: 0xffd700, size: 1.2, transparent: true, opacity: 0.9,
+    sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const sparkPoints = new THREE.Points(sparkGeo, sparkMat);
+  scene.add(sparkPoints);
+
   interface Electron { sx: number; sy: number; sz: number; ex: number; ey: number; ez: number; t: number; speed: number; }
   const activeElectrons: Electron[] = [];
   let electronSpawnRate = 0, targetElectronRate = 0, lastElectronSpawn = 0;
   let activeConnections: { x1: number; y1: number; z1: number; x2: number; y2: number; z2: number }[] = [];
-
-  // ── Knowledge nodes ──
-  const nodeGroup = new THREE.Group();
-  scene.add(nodeGroup);
-
-  const nodeStates = new Map<string, NodeState>();
-  const sphereGeo = new THREE.SphereGeometry(1.2, 10, 10);
-
-  for (const def of NODE_DEFS) {
-    // Node sphere
-    const nodeMat = new THREE.MeshBasicMaterial({
-      color: 0x1a4a7a, transparent: true, opacity: 0.35,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(sphereGeo, nodeMat.clone());
-    mesh.position.set(def.x, def.y, def.z);
-    nodeGroup.add(mesh);
-
-    // Text label
-    const sprite = makeTextSprite(def.label);
-    sprite.position.set(def.x, def.y + 3.8, def.z);
-    nodeGroup.add(sprite);
-
-    // Line from brain center to node
-    const linePts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(def.x, def.y, def.z)];
-    const lg = new THREE.BufferGeometry().setFromPoints(linePts);
-    const lm = new THREE.LineBasicMaterial({
-      color: 0x1a4a6a, transparent: true, opacity: 0.12,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    const nodeLine = new THREE.Line(lg, lm);
-    nodeGroup.add(nodeLine);
-
-    nodeStates.set(def.id, { def, mesh, sprite, line: nodeLine, activation: 0, activatedAt: -999 });
-  }
 
   // ── State ──
   let state: OrbState = "idle";
@@ -179,6 +122,9 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
   let transitionEnergy = 0;
   let lastState: OrbState = "idle";
   let cloudZ = 0, cloudZVel = 0;
+
+  // Memory flash state
+  let memoryFlash = 0;
 
   // ── Audio ──
   let analyser: AnalyserNode | null = null;
@@ -222,6 +168,8 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       spinZ += transitionEnergy * 0.008 * Math.cos(t * 1.3);
     }
 
+    memoryFlash *= 0.92;
+
     bass = 0; mid = 0;
     if (analyser) {
       analyser.getByteFrequencyData(freqData);
@@ -243,7 +191,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     lineSegs.rotation.x = spinX; lineSegs.rotation.y = spinY; lineSegs.rotation.z = spinZ;
     lineSegs.position.z = cloudZ;
 
-    // ── Update brain particles ──
+    // ── Brain particles ──
     const p = geo.getAttribute("position") as THREE.BufferAttribute;
     const a = p.array as Float32Array;
 
@@ -260,7 +208,6 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       vel[i3 + 1] += Math.cos(t * 0.025 + px * 1.7 + z * 0.1) * 0.0008 * currentSpeed;
       vel[i3 + 2] += Math.sin(t * 0.022 + px * 0.9 + x * 0.1) * 0.0008 * currentSpeed;
 
-      // Pull toward lobe center to maintain brain shape
       const dx = x - lobeCX, dy = y, dz = z;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.01;
       const pull = Math.max(0, dist - currentRadius) * 0.002 + 0.0003;
@@ -284,7 +231,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     }
     p.needsUpdate = true;
 
-    // ── Update connection lines ──
+    // ── Connection lines ──
     if (lineAmount > 0.01) {
       const lp = lineGeo.getAttribute("position") as THREE.BufferAttribute;
       const la = lp.array as Float32Array;
@@ -321,7 +268,7 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       activeConnections = [];
     }
 
-    // ── Update electrons ──
+    // ── Electrons ──
     if (activeConnections.length > 0 && electronSpawnRate > 0.005) {
       if (activeElectrons.length < 3 && (t - lastElectronSpawn) > 1.0) {
         const conn = activeConnections[Math.floor(Math.random() * activeConnections.length)];
@@ -333,7 +280,6 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
     const ep = electronGeo.getAttribute("position") as THREE.BufferAttribute;
     const ea = ep.array as Float32Array;
     let aliveCount = 0;
-
     for (let e = activeElectrons.length - 1; e >= 0; e--) {
       const el = activeElectrons[e];
       el.t += el.speed;
@@ -344,43 +290,34 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       ea[ei+2] = el.sz + (el.ez - el.sz) * el.t;
       aliveCount++;
     }
-
     electronGeo.setDrawRange(0, aliveCount);
     ep.needsUpdate = true;
     electrons.rotation.x = spinX; electrons.rotation.y = spinY; electrons.rotation.z = spinZ;
     electrons.position.z = cloudZ;
 
-    mat.opacity = currentBright + bass * 0.08;
+    // ── Memory sparks — orbit brain center ──
+    const sp = sparkGeo.getAttribute("position") as THREE.BufferAttribute;
+    const sa = sp.array as Float32Array;
+    for (let s = 0; s < sparks.length; s++) {
+      const sk = sparks[s];
+      sk.angle += sk.speed;
+      const s3 = s * 3;
+      sa[s3]     = Math.cos(sk.angle) * sk.radius;
+      sa[s3 + 1] = sk.y + Math.sin(sk.angle * 0.7) * 2;
+      sa[s3 + 2] = Math.sin(sk.angle) * sk.radius;
+    }
+    sparkGeo.setDrawRange(0, sparks.length);
+    sp.needsUpdate = true;
+    sparkMat.opacity = 0.7 + memoryFlash * 0.3;
+    sparkPoints.rotation.y = spinY * 0.1;
+    sparkPoints.position.z = cloudZ;
+
+    mat.opacity = currentBright + bass * 0.08 + memoryFlash * 0.15;
     mat.size = currentSize + bass * 0.05;
 
     if (state === "thinking")      { mat.color.lerp(new THREE.Color(0x6ec4ff), 0.015); lineMat.color.lerp(new THREE.Color(0x6ec4ff), 0.015); }
     else if (state === "speaking") { mat.color.lerp(new THREE.Color(0x5ab8f0), 0.015); lineMat.color.lerp(new THREE.Color(0x5ab8f0), 0.015); }
     else                           { mat.color.lerp(new THREE.Color(0x4ca8e8), 0.015); lineMat.color.lerp(new THREE.Color(0x4ca8e8), 0.015); }
-
-    // ── Update knowledge nodes ──
-    for (const [, ns] of nodeStates) {
-      const age = t - ns.activatedAt;
-      ns.activation = Math.max(0, 1 - age / 3.0);
-
-      const glow = ns.activation * (0.85 + Math.sin(t * 5 + ns.def.x) * 0.1 * ns.activation);
-      const nodeMat = ns.mesh.material as THREE.MeshBasicMaterial;
-      nodeMat.opacity = 0.15 + glow * 0.75;
-      if (ns.activation > 0.1) {
-        nodeMat.color.set(new THREE.Color(0x00ccff).lerp(new THREE.Color(0x2277cc), 1 - ns.activation));
-      } else {
-        nodeMat.color.set(0x1a4a7a);
-      }
-
-      const spriteMat = ns.sprite.material as THREE.SpriteMaterial;
-      spriteMat.opacity = 0.25 + ns.activation * 0.75;
-
-      const lm2 = ns.line.material as THREE.LineBasicMaterial;
-      lm2.opacity = 0.08 + ns.activation * 0.45;
-      if (ns.activation > 0.1) lm2.color.set(0x00aaff);
-      else lm2.color.set(0x1a4a6a);
-    }
-
-    nodeGroup.rotation.y = spinY * 0.25;
 
     camera.position.x = Math.sin(t * 0.02) * 5;
     camera.position.y = Math.cos(t * 0.03) * 3;
@@ -404,19 +341,19 @@ export function createOrb(canvas: HTMLCanvasElement): Orb {
       analyser = a;
       if (a) freqData = new Uint8Array(a.frequencyBinCount);
     },
-    activateNode(nodeId: string) {
-      const ns = nodeStates.get(nodeId);
-      if (!ns) return;
-      ns.activation = 1.0;
-      ns.activatedAt = clock.getElapsedTime();
-      // Spawn an electron from brain center toward the node
-      if (activeElectrons.length < MAX_ELECTRONS - 1) {
-        activeElectrons.push({
-          sx: (Math.random() - 0.5) * 8, sy: (Math.random() - 0.5) * 6, sz: (Math.random() - 0.5) * 4,
-          ex: ns.def.x * 0.7, ey: ns.def.y * 0.7, ez: ns.def.z * 0.7,
-          t: 0, speed: 0.012 + Math.random() * 0.006,
-        });
-      }
+    activateNode(_nodeId: string) {
+      // Node activation is shown in the Brain Map view; just flash the brain here
+      memoryFlash = Math.min(1, memoryFlash + 0.4);
+    },
+    memorySpark() {
+      if (sparks.length >= MAX_SPARKS) return;
+      sparks.push({
+        angle: Math.random() * Math.PI * 2,
+        radius: 22 + Math.random() * 8,
+        speed: (0.008 + Math.random() * 0.012) * (Math.random() < 0.5 ? 1 : -1),
+        y: (Math.random() - 0.5) * 16,
+      });
+      memoryFlash = 1.0;
     },
     destroy() {
       destroyed = true;

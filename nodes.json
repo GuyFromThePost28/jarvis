@@ -1,0 +1,9 @@
+[
+  { "id": "calendar", "label": "Calendar",    "x": -24, "y":  18, "z":  4 },
+  { "id": "mail",     "label": "Mail",        "x":  24, "y":  18, "z":  4 },
+  { "id": "memory",   "label": "Memory",      "x":   0, "y":  30, "z":  0 },
+  { "id": "spotify",  "label": "Spotify",     "x": -26, "y": -10, "z":  4 },
+  { "id": "bambu",    "label": "Bambu",       "x":  26, "y": -10, "z":  4 },
+  { "id": "screen",   "label": "Screen",      "x": -20, "y": -22, "z": -4 },
+  { "id": "claude",   "label": "Claude Code", "x":  20, "y": -22, "z": -4 }
+]

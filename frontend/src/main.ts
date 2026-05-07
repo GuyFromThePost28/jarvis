@@ -9,6 +9,7 @@ import { createOrb, type OrbState } from "./orb";
 import { createVoiceInput, createAudioPlayer } from "./voice";
 import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup } from "./settings";
+import { brainMap } from "./brainmap";
 import "./style.css";
 
 // ---------------------------------------------------------------------------
@@ -143,6 +144,10 @@ socket.onMessage((msg) => {
     console.log("[task]", "complete:", msg.task_id, msg.status, msg.summary);
   } else if (type === "node_activate") {
     orb.activateNode(msg.node as string);
+    brainMap.activateNode(msg.node as string);
+  } else if (type === "memory_store") {
+    orb.memorySpark();
+    brainMap.onMemoryStore();
   }
 });
 
@@ -177,6 +182,7 @@ ensureAudioContext();
 const btnMute = document.getElementById("btn-mute")!;
 const btnMenu = document.getElementById("btn-menu")!;
 const menuDropdown = document.getElementById("menu-dropdown")!;
+const btnNeuralMap = document.getElementById("btn-neural-map")!;
 const btnRestart = document.getElementById("btn-restart")!;
 const btnFixSelf = document.getElementById("btn-fix-self")!;
 
@@ -200,6 +206,12 @@ btnMenu.addEventListener("click", (e) => {
 
 document.addEventListener("click", () => {
   menuDropdown.style.display = "none";
+});
+
+btnNeuralMap.addEventListener("click", (e) => {
+  e.stopPropagation();
+  menuDropdown.style.display = "none";
+  brainMap.open();
 });
 
 btnRestart.addEventListener("click", async (e) => {
@@ -235,3 +247,20 @@ btnSettings.addEventListener("click", (e) => {
 setTimeout(() => {
   checkFirstTimeSetup();
 }, 2000);
+
+// Poll for new nodes every 30s — auto-adds them to the brain map when new integrations are connected
+const knownNodeIds = new Set<string>();
+async function pollNodes() {
+  try {
+    const res = await fetch("/api/nodes");
+    const nodes: { id: string; label: string; x: number; y: number; z: number }[] = await res.json();
+    for (const n of nodes) {
+      if (!knownNodeIds.has(n.id)) {
+        knownNodeIds.add(n.id);
+        brainMap.addNode(n);
+      }
+    }
+  } catch { /* server may not be ready yet */ }
+}
+pollNodes();
+setInterval(pollNodes, 30_000);
