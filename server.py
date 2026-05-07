@@ -802,6 +802,9 @@ async def _spotify_action(action: str, target: str, ws, history: list, voice_sta
         else:
             msg = await format_now_playing()
         await _speak_and_log(msg, ws, history, voice_state)
+        if ws:
+            try: await ws.send_json({"type": "node_activate", "node": "spotify"})
+            except Exception: pass
     except Exception as e:
         log.error(f"Spotify action error: {e}")
 
@@ -816,6 +819,9 @@ async def _alarm_action(kind: str, time_str: str, label: str, ws, history: list,
         else:
             result = await set_alarm(time_str, label or "Alarm")
         await _speak_and_log(result["confirmation"], ws, history, voice_state)
+        if ws:
+            try: await ws.send_json({"type": "node_activate", "node": "memory"})
+            except Exception: pass
     except Exception as e:
         log.error(f"Alarm action error: {e}")
 
@@ -836,6 +842,9 @@ async def _bambu_action(action: str, ws, history: list, voice_state: dict):
         else:
             msg = "Unknown printer command, Sir."
         await _speak_and_log(msg, ws, history, voice_state)
+        if ws:
+            try: await ws.send_json({"type": "node_activate", "node": "bambu"})
+            except Exception: pass
     except Exception as e:
         log.error(f"Bambu action error: {e}")
 
@@ -1719,6 +1728,12 @@ async def _lookup_and_report(lookup_type: str, lookup_fn, ws, history: list[dict
                 pass
 
         log.info(f"Lookup {lookup_type} complete: {result_text[:80]}")
+
+        # Activate the matching knowledge node
+        node_map = {"calendar": "calendar", "mail": "mail", "screen": "screen"}
+        if lookup_type in node_map and ws:
+            try: await ws.send_json({"type": "node_activate", "node": node_map[lookup_type]})
+            except Exception: pass
 
         # Store lookup result in conversation history so JARVIS remembers it
         if history is not None:

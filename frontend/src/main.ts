@@ -141,6 +141,8 @@ socket.onMessage((msg) => {
     console.log("[task]", "spawned:", msg.task_id, msg.prompt);
   } else if (type === "task_complete") {
     console.log("[task]", "complete:", msg.task_id, msg.status, msg.summary);
+  } else if (type === "node_activate") {
+    orb.activateNode(msg.node as string);
   }
 });
 
