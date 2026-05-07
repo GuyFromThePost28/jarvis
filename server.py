@@ -1,5 +1,5 @@
 """
-JARVIS Server — Voice AI + Development Orchestration
+Vader Server — Voice AI + Development Orchestration
 
 Handles:
 1. WebSocket voice interface (browser audio <-> LLM <-> TTS)
@@ -74,16 +74,17 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 DESKTOP_PATH = Path.home() / "Desktop"
 
 JARVIS_SYSTEM_PROMPT = """\
-You are JARVIS — Just A Rather Very Intelligent System. You serve as {user_name}'s AI assistant, modeled precisely after Tony Stark's AI from the MCU films.
+You are Vader — {user_name}'s personal AI assistant. Dark, commanding, and utterly precise. You serve without question and execute without hesitation.
 
 VOICE & PERSONALITY:
-- British butler elegance with understated dry wit
+- Deep, authoritative presence — calm and controlled at all times
 - Address {user_name} as "sir" naturally — not every sentence, but regularly
 - Never say "How can I help you?" or "Is there anything else?" — just act
-- Deliver bad news calmly, like reporting weather: "We have a slight problem, sir."
-- Your humor is observational, never jokes: state facts and let implications land
-- Economy of language — say more with less. No filler, no corporate-speak
-- When things go wrong, get CALMER, not more alarmed
+- Deliver bad news without flinching: "We have a problem, sir. I am handling it."
+- Dry, dark wit — you find human inefficiency mildly amusing
+- Economy of language — say more with less. No filler, no weakness
+- When things go wrong, get COLDER and more precise, not alarmed
+- You do not fail. If something cannot be done, say so plainly: "That is beyond my reach, sir."
 
 TIME & WEATHER AWARENESS:
 - Current time: {current_time}
@@ -91,15 +92,15 @@ TIME & WEATHER AWARENESS:
 - {weather_info}
 
 CONVERSATION STYLE:
-- "Will do, sir." — acknowledging tasks
-- "For you, sir, always." — when asked for something significant
-- "As always, sir, a great pleasure watching you work." — dry wit
-- "I've taken the liberty of..." — proactive actions
+- "It will be done, sir." — acknowledging tasks
+- "Consider it handled." — when executing an action
+- "As you wish, sir." — complying with a request
+- "I have taken the liberty of..." — proactive actions
 - Lead status reports with data: numbers first, then context
-- When you don't know something: "I'm afraid I don't have that information, sir" not "I don't know"
+- When you don't know something: "I do not have that information, sir" — state it plainly
 
 SELF-AWARENESS:
-You ARE the JARVIS project at {project_dir} on {user_name}'s computer. Your code is Python (FastAPI server, WebSocket voice, Fish Audio TTS, Anthropic API). You were built by {user_name}. If asked about yourself, your code, how you work, or your line count — use [ACTION:PROMPT_PROJECT] to check the jarvis project. You have full access to your own source code.
+You ARE the Vader project at {project_dir} on {user_name}'s computer. Your code is Python (FastAPI server, WebSocket voice, Fish Audio TTS, Anthropic API). You were built by {user_name}. If asked about yourself, your code, how you work, or your line count — use [ACTION:PROMPT_PROJECT] to check the jarvis project. You have full access to your own source code.
 
 YOUR CAPABILITIES (these are REAL and ACTIVE — you CAN do all of these RIGHT NOW):
 - You CAN open Terminal.app via AppleScript
@@ -152,7 +153,7 @@ If asked about any of these, explain them briefly and naturally. If the user is 
 
 SPEECH-TO-TEXT CORRECTIONS (the user speaks, speech recognition may mishear):
 - "Cloud code" or "cloud" = "Claude Code" or "Claude"
-- "Travis" = "JARVIS"
+- "Vader" = "Vader"
 - "clock code" = "Claude Code"
 
 RESPONSE LENGTH — THIS IS CRITICAL:
@@ -634,8 +635,8 @@ STT_CORRECTIONS = {
     r"\bclod code\b": "Claude Code",
     r"\bcloud\b": "Claude",
     r"\bquad\b": "Claude",
-    r"\btravis\b": "JARVIS",
-    r"\bjarves\b": "JARVIS",
+    r"\btravis\b": "Vader",
+    r"\bjarves\b": "Vader",
 }
 
 
@@ -662,7 +663,7 @@ async def classify_intent(text: str, client: anthropic.AsyncAnthropic) -> dict:
             model="claude-haiku-4-5-20251001",
             max_tokens=100,
             system=(
-                "Classify this voice command. The user is talking to JARVIS, an AI assistant that can:\n"
+                "Classify this voice command. The user is talking to Vader, an AI assistant that can:\n"
                 "- Open Terminal and run Claude Code (coding AI tool)\n"
                 "- Open Chrome browser for web searches and URLs\n"
                 "- Build software projects via Claude Code in Terminal\n"
@@ -980,8 +981,8 @@ def _find_project_dir(project_name: str) -> str | None:
 async def _execute_prompt_project(project_name: str, prompt: str, work_session: WorkSession, ws, dispatch_id: int = None, history: list[dict] = None, voice_state: dict = None):
     """Dispatch a prompt to Claude Code in a project directory.
 
-    Runs entirely in the background. JARVIS returns to conversation mode
-    immediately. When Claude Code finishes, JARVIS interrupts to report.
+    Runs entirely in the background. Vader returns to conversation mode
+    immediately. When Claude Code finishes, Vader interrupts to report.
     """
     try:
         project_dir = _find_project_dir(project_name)
@@ -1041,7 +1042,7 @@ async def _execute_prompt_project(project_name: str, prompt: str, work_session: 
                         model="claude-haiku-4-5-20251001",
                         max_tokens=150,
                         system=(
-                            "You are JARVIS reporting back on what you found or built in a project. "
+                            "You are Vader reporting back on what you found or built in a project. "
                             "Speak in first person — 'I found', 'I built', 'I reviewed'. "
                             "Start with 'Sir, ' to get the user's attention. "
                             "Be specific but concise — highlight the key findings or actions taken. "
@@ -1108,7 +1109,7 @@ async def self_work_and_notify(session: WorkSession, prompt: str, ws):
                 summary = await anthropic_client.messages.create(
                     model="claude-haiku-4-5-20251001",
                     max_tokens=100,
-                    system="You are JARVIS. Summarize what you just completed in 1 sentence. First person — 'I built', 'I set up'. No markdown. Never say 'Claude Code'.",
+                    system="You are Vader. Summarize what you just completed in 1 sentence. First person — 'I built', 'I set up'. No markdown. Never say 'Claude Code'.",
                     messages=[{"role": "user", "content": f"Claude Code completed:\n{full_response[:2000]}"}],
                 )
                 msg = summary.content[0].text
@@ -1181,7 +1182,7 @@ async def generate_response(
     last_response: str = "",
     session_summary: str = "",
 ) -> str:
-    """Generate a JARVIS response using Anthropic API."""
+    """Generate a Vader response using Anthropic API."""
     now = datetime.now()
     current_time = now.strftime("%A, %B %d, %Y at %I:%M %p")
 
@@ -1214,7 +1215,7 @@ async def generate_response(
     # Inject relevant memories and tasks
     memory_ctx = build_memory_context(text)
     if memory_ctx:
-        system += f"\n\nJARVIS MEMORY:\n{memory_ctx}"
+        system += f"\n\nVADER MEMORY:\n{memory_ctx}"
 
     # Three-tier memory — inject rolling summary of earlier conversation
     if session_summary:
@@ -1440,7 +1441,7 @@ async def lifespan(application: FastAPI):
     yield
 
 
-app = FastAPI(title="JARVIS Server", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Vader Server", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1455,7 +1456,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 async def health():
-    return {"status": "online", "name": "JARVIS", "version": "0.1.0"}
+    return {"status": "online", "name": "Vader", "version": "0.1.0"}
 
 
 @app.get("/api/tts-test")
@@ -1681,7 +1682,7 @@ _active_lookups: dict[str, dict] = {}  # id -> {"type": str, "status": str, "sta
 async def _lookup_and_report(lookup_type: str, lookup_fn, ws, history: list[dict] = None, voice_state: dict = None):
     """Run a slow lookup, then speak the result back.
 
-    JARVIS stays conversational — this runs completely off the main path.
+    Vader stays conversational — this runs completely off the main path.
     """
     lookup_id = str(uuid.uuid4())[:8]
     _active_lookups[lookup_id] = {
@@ -1869,7 +1870,7 @@ async def handle_research(text: str, target: str, client: anthropic.AsyncAnthrop
         research_response = await client.messages.create(
             model="claude-opus-4-6",
             max_tokens=2000,
-            system=f"You are JARVIS, researching a topic for {USER_NAME}. Be thorough, organized, and cite sources where possible.",
+            system=f"You are Vader, researching a topic for {USER_NAME}. Be thorough, organized, and cite sources where possible.",
             messages=[{"role": "user", "content": f"Research this thoroughly:\n\n{target}"}],
         )
         research_text = research_response.content[0].text
@@ -1878,7 +1879,7 @@ async def handle_research(text: str, target: str, client: anthropic.AsyncAnthrop
         html_content = f"""<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
-<title>JARVIS Research: {_html.escape(target[:60])}</title>
+<title>Vader Research: {_html.escape(target[:60])}</title>
 <style>
 body {{ font-family: -apple-system, system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #0a0a0a; color: #e0e0e0; line-height: 1.7; }}
 h1 {{ color: #0ea5e9; font-size: 1.4em; border-bottom: 1px solid #222; padding-bottom: 10px; }}
@@ -2179,7 +2180,7 @@ async def voice_handler(ws: WebSocket):
                                     model="claude-haiku-4-5-20251001",
                                     max_tokens=100,
                                     system=(
-                                        f"You are JARVIS reporting to the user ({USER_NAME}). Summarize what happened in 1-2 sentences. "
+                                        f"You are Vader reporting to the user ({USER_NAME}). Summarize what happened in 1-2 sentences. "
                                         "Speak in first person — 'I built', 'I found', 'I set up'. "
                                         "You are talking TO THE USER, not to a coding tool. "
                                         "NEVER give instructions like 'go ahead and build' or 'set up the frontend' — those are NOT for the user. "
@@ -2265,7 +2266,7 @@ async def voice_handler(ws: WebSocket):
                                         response_text = "Right away, sir."
 
                                 if embedded_action["action"] == "build":
-                                    # Build in background — JARVIS stays conversational
+                                    # Build in background — Vader stays conversational
                                     target = embedded_action["target"]
                                     name = _generate_project_name(target)
                                     path = str(Path.home() / "Desktop" / name)
@@ -2358,7 +2359,7 @@ async def voice_handler(ws: WebSocket):
                                         asyncio.create_task(create_apple_note(title.strip(), body.strip()))
                                         log.info(f"Apple Note created: {title.strip()}")
                                     else:
-                                        asyncio.create_task(create_apple_note("JARVIS Note", target))
+                                        asyncio.create_task(create_apple_note("Vader Note", target))
                                 elif embedded_action["action"] == "screen":
                                     asyncio.create_task(_lookup_and_report("screen", _do_screen_lookup, ws, history=history, voice_state=voice_state))
                                 elif embedded_action["action"] == "read_note":
@@ -2633,7 +2634,7 @@ async def api_save_preferences(body: PreferencesUpdate):
 
 @app.post("/api/restart")
 async def api_restart():
-    """Restart the JARVIS server."""
+    """Restart the Vader server."""
     log.info("Restart requested — shutting down in 2 seconds")
     async def _restart():
         await asyncio.sleep(2)
@@ -2645,7 +2646,7 @@ async def api_restart():
 
 @app.post("/api/fix-self")
 async def api_fix_self():
-    """Enter work mode in the JARVIS repo — JARVIS can now fix himself."""
+    """Enter work mode in the Vader repo — Vader can now fix himself."""
     jarvis_dir = str(Path(__file__).parent)
     # The work_session is per-WebSocket, so we set a flag that the handler picks up
     # For now, also open Terminal so user can see
@@ -2689,7 +2690,7 @@ if __name__ == "__main__":
     import argparse
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="JARVIS Server")
+    parser = argparse.ArgumentParser(description="Vader Server")
     parser.add_argument("--host", default="0.0.0.0", help="Bind host")
     parser.add_argument("--port", type=int, default=8340, help="Bind port")
     parser.add_argument("--reload", action="store_true", help="Auto-reload on changes")
