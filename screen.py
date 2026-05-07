@@ -6,6 +6,7 @@ Two capabilities:
 2. Screenshot via screencapture → Claude vision API (sees everything)
 """
 
+from __future__ import annotations
 import asyncio
 import base64
 import json

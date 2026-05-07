@@ -9,6 +9,7 @@ The user sees Claude Code working in their Terminal window.
 JARVIS reads the responses via subprocess, summarizes, and reports back.
 """
 
+from __future__ import annotations
 import asyncio
 import json
 import logging

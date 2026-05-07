@@ -5,6 +5,7 @@ Execute actions IMMEDIATELY, before generating any LLM response.
 Each function returns {"success": bool, "confirmation": str}.
 """
 
+from __future__ import annotations
 import asyncio
 import logging
 import os

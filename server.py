@@ -8,6 +8,7 @@ Handles:
 4. REST API for task management
 """
 
+from __future__ import annotations
 import asyncio
 import base64
 import json
@@ -50,6 +51,9 @@ from memory import (
     format_tasks_for_voice, extract_memories, get_important_memories,
 )
 from notes_access import get_recent_notes, read_note, search_notes_apple, create_apple_note
+from spotify_access import get_current_track, play_track, play_pause, next_track, previous_track, set_volume, format_now_playing
+from alarm_access import set_alarm, set_timer, format_alarms_summary
+from bambu_access import format_printer_status, pause_print, resume_print, stop_print
 from dispatch_registry import DispatchRegistry
 from planner import TaskPlanner, detect_planning_mode, BYPASS_PHRASES
 
@@ -203,6 +207,18 @@ CRITICAL: When the user asks about their SCREEN, what's RUNNING, or what they're
 - [ACTION:CREATE_NOTE] title ||| body — create a new Apple Note. For saving plans, ideas, lists.
   "save that as a note" → [ACTION:CREATE_NOTE] Day Plan March 19 ||| Morning: client calls. Afternoon: TikTok dashboard. Evening: JARVIS improvements.
 - [ACTION:READ_NOTE] title search — read an existing Apple Note by title keyword.
+- [ACTION:SPOTIFY_PLAY] song or artist — play a song on Spotify. "play Drake" → [ACTION:SPOTIFY_PLAY] Drake
+- [ACTION:SPOTIFY_PAUSE] — pause or resume Spotify playback
+- [ACTION:SPOTIFY_NEXT] — skip to next track
+- [ACTION:SPOTIFY_PREV] — go back to previous track
+- [ACTION:SPOTIFY_VOLUME] level — set Spotify volume 0-100. "turn it up to 80" → [ACTION:SPOTIFY_VOLUME] 80
+- [ACTION:SPOTIFY_NOW] — report what's currently playing on Spotify
+- [ACTION:SET_ALARM] time ||| label — set an alarm. "wake me at 7am" → [ACTION:SET_ALARM] 7am ||| Wake up
+- [ACTION:SET_TIMER] duration — set a countdown timer. "set a 10 minute timer" → [ACTION:SET_TIMER] 10 minutes
+- [ACTION:BAMBU_STATUS] — check the status of the Bambu 3D printer
+- [ACTION:BAMBU_PAUSE] — pause the current Bambu print
+- [ACTION:BAMBU_RESUME] — resume a paused Bambu print
+- [ACTION:BAMBU_STOP] — cancel/stop the current Bambu print
 
 You use Claude Code as your tool to build, research, and write code — but YOU are the one doing the work. Never say "Claude Code did X" or "Claude Code is asking" — say "I built X", "I'm checking on that", "I found X". You ARE the intelligence. Claude Code is just your hands.
 
@@ -738,7 +754,7 @@ def extract_action(response: str) -> tuple[str, dict | None]:
     Returns (clean_text_for_tts, action_dict_or_none).
     """
     match = _action_re.search(
-        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|SCREEN)\]\s*(.*?)$',
+        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|SCREEN|SPOTIFY_PLAY|SPOTIFY_PAUSE|SPOTIFY_NEXT|SPOTIFY_PREV|SPOTIFY_VOLUME|SPOTIFY_NOW|SET_ALARM|SET_TIMER|BAMBU_STATUS|BAMBU_PAUSE|BAMBU_RESUME|BAMBU_STOP)\]\s*(.*?)$',
         response, _action_re.DOTALL,
     )
     if match:
@@ -747,6 +763,80 @@ def extract_action(response: str) -> tuple[str, dict | None]:
         clean_text = response[:match.start()].strip()
         return clean_text, {"action": action_type, "target": action_target}
     return response, None
+
+
+async def _speak_and_log(msg: str, ws, history: list, voice_state: dict):
+    """Synthesize speech for a follow-up action result and send to client."""
+    audio = await synthesize_speech(strip_markdown_for_tts(msg))
+    if audio and ws:
+        try:
+            await ws.send_json({"type": "status", "state": "speaking"})
+            await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": msg})
+        except Exception:
+            pass
+    history.append({"role": "assistant", "content": msg})
+
+
+async def _spotify_action(action: str, target: str, ws, history: list, voice_state: dict):
+    try:
+        if action == "play":
+            result = await play_track(target)
+            msg = result["confirmation"]
+        elif action == "pause":
+            result = await play_pause()
+            msg = result["confirmation"]
+        elif action == "next":
+            result = await next_track()
+            msg = result["confirmation"]
+        elif action == "prev":
+            result = await previous_track()
+            msg = result["confirmation"]
+        elif action == "volume":
+            try:
+                level = int("".join(filter(str.isdigit, target)))
+            except Exception:
+                level = 50
+            result = await set_volume(level)
+            msg = result["confirmation"]
+        else:
+            msg = await format_now_playing()
+        await _speak_and_log(msg, ws, history, voice_state)
+    except Exception as e:
+        log.error(f"Spotify action error: {e}")
+
+
+async def _alarm_action(kind: str, time_str: str, label: str, ws, history: list, voice_state: dict):
+    try:
+        if kind == "timer":
+            import re as _re
+            nums = _re.findall(r'\d+', time_str)
+            minutes = int(nums[0]) if nums else 5
+            result = await set_timer(minutes, label or f"{minutes} minute timer")
+        else:
+            result = await set_alarm(time_str, label or "Alarm")
+        await _speak_and_log(result["confirmation"], ws, history, voice_state)
+    except Exception as e:
+        log.error(f"Alarm action error: {e}")
+
+
+async def _bambu_action(action: str, ws, history: list, voice_state: dict):
+    try:
+        if action == "status":
+            msg = await format_printer_status()
+        elif action == "pause":
+            result = await pause_print()
+            msg = result["confirmation"]
+        elif action == "resume":
+            result = await resume_print()
+            msg = result["confirmation"]
+        elif action == "stop":
+            result = await stop_print()
+            msg = result["confirmation"]
+        else:
+            msg = "Unknown printer command, Sir."
+        await _speak_and_log(msg, ws, history, voice_state)
+    except Exception as e:
+        log.error(f"Bambu action error: {e}")
 
 
 async def _execute_build(target: str):
@@ -2287,6 +2377,41 @@ async def voice_handler(ws: WebSocket):
                                             except Exception:
                                                 pass
                                     asyncio.create_task(_read_and_report(embedded_action["target"].strip(), ws))
+
+                                # --- Spotify ---
+                                elif embedded_action["action"] == "spotify_play":
+                                    asyncio.create_task(_spotify_action("play", embedded_action["target"].strip(), ws, history, voice_state))
+                                elif embedded_action["action"] == "spotify_pause":
+                                    asyncio.create_task(_spotify_action("pause", "", ws, history, voice_state))
+                                elif embedded_action["action"] == "spotify_next":
+                                    asyncio.create_task(_spotify_action("next", "", ws, history, voice_state))
+                                elif embedded_action["action"] == "spotify_prev":
+                                    asyncio.create_task(_spotify_action("prev", "", ws, history, voice_state))
+                                elif embedded_action["action"] == "spotify_volume":
+                                    asyncio.create_task(_spotify_action("volume", embedded_action["target"].strip(), ws, history, voice_state))
+                                elif embedded_action["action"] == "spotify_now":
+                                    asyncio.create_task(_spotify_action("now", "", ws, history, voice_state))
+
+                                # --- Alarms ---
+                                elif embedded_action["action"] == "set_alarm":
+                                    target = embedded_action["target"]
+                                    parts = target.split("|||")
+                                    time_str = parts[0].strip()
+                                    label = parts[1].strip() if len(parts) > 1 else "Alarm"
+                                    asyncio.create_task(_alarm_action("alarm", time_str, label, ws, history, voice_state))
+                                elif embedded_action["action"] == "set_timer":
+                                    target = embedded_action["target"].strip()
+                                    asyncio.create_task(_alarm_action("timer", target, "", ws, history, voice_state))
+
+                                # --- Bambu ---
+                                elif embedded_action["action"] == "bambu_status":
+                                    asyncio.create_task(_bambu_action("status", ws, history, voice_state))
+                                elif embedded_action["action"] == "bambu_pause":
+                                    asyncio.create_task(_bambu_action("pause", ws, history, voice_state))
+                                elif embedded_action["action"] == "bambu_resume":
+                                    asyncio.create_task(_bambu_action("resume", ws, history, voice_state))
+                                elif embedded_action["action"] == "bambu_stop":
+                                    asyncio.create_task(_bambu_action("stop", ws, history, voice_state))
 
                 # Update history
                 history.append({"role": "user", "content": user_text})
