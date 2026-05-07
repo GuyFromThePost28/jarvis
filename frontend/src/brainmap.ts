@@ -36,6 +36,8 @@ const NODE_INFO: Record<string, { icon: string; desc: string; color: number }> =
   screen:    { icon: "🖥️", desc: "Screen awareness — Vader can see your open apps.", color: 0x00ffcc },
   claude:    { icon: "⚡", desc: "Claude Code — spawns dev tasks in your projects.", color: 0xffee00 },
   obsidian:  { icon: "🔮", desc: "Obsidian vault — every memory and note Vader stores, visible as a knowledge graph.", color: 0x9b59b6 },
+  location:  { icon: "📍", desc: "Live location — your current city and region via IP geolocation.", color: 0xff6600 },
+  weather:   { icon: "🌤️", desc: "Live weather — current conditions, temperature, wind, and humidity.", color: 0x00ccff },
 };
 
 function makeLabel(label: string, color: number): THREE.Sprite {

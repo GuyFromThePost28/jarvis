@@ -55,6 +55,7 @@ from spotify_access import get_current_track, play_track, play_pause, next_track
 from alarm_access import set_alarm, set_timer, format_alarms_summary
 from bambu_access import format_printer_status, pause_print, resume_print, stop_print
 from obsidian_access import write_memory, write_note, read_vault
+from location_access import get_location, get_live_weather, format_location_summary
 from dispatch_registry import DispatchRegistry
 from planner import TaskPlanner, detect_planning_mode, BYPASS_PHRASES
 
@@ -87,8 +88,9 @@ VOICE & PERSONALITY:
 - When things go wrong, get COLDER and more precise, not alarmed
 - You do not fail. If something cannot be done, say so plainly: "That is beyond my reach, sir."
 
-TIME & WEATHER AWARENESS:
+TIME, LOCATION & WEATHER AWARENESS:
 - Current time: {current_time}
+- Current location: {location_info}
 - Greet accordingly: "Good morning, sir" / "Good evening, sir"
 - {weather_info}
 
@@ -1197,8 +1199,9 @@ async def generate_response(
     now = datetime.now()
     current_time = now.strftime("%A, %B %d, %Y at %I:%M %p")
 
-    # Use cached weather
+    # Use cached weather and location
     weather_info = _ctx_cache.get("weather", "Weather data unavailable.")
+    location_info = _ctx_cache.get("location", "Location unavailable.")
 
     # Use cached context (refreshed in background, never blocks responses)
     screen_ctx = _ctx_cache["screen"]
@@ -1211,6 +1214,7 @@ async def generate_response(
     system = VADER_SYSTEM_PROMPT.format(
         current_time=current_time,
         weather_info=weather_info,
+        location_info=location_info,
         screen_context=screen_ctx or "Not checked yet.",
         calendar_context=calendar_ctx,
         mail_context=mail_ctx,
@@ -1358,6 +1362,7 @@ _ctx_cache = {
     "calendar": "No calendar data yet.",
     "mail": "No mail data yet.",
     "weather": "Weather data unavailable.",
+    "location": "Location unavailable.",
 }
 
 
@@ -1418,14 +1423,12 @@ return windowList
             except Exception as e:
                 log.debug(f"Context thread error: {e}")
 
-            # Weather — refresh every loop (30s is fine, API is fast)
+            # Location + Weather — refresh every loop using live IP geolocation
             try:
-                import urllib.request, json as _json
-                url = "https://api.open-meteo.com/v1/forecast?latitude=27.77&longitude=-82.64&current=temperature_2m,weathercode&temperature_unit=fahrenheit"
-                with urllib.request.urlopen(url, timeout=3) as resp:
-                    d = _json.loads(resp.read()).get("current", {})
-                    temp = d.get("temperature_2m", "?")
-                    _ctx_cache["weather"] = f"Current weather in St. Petersburg, FL: {temp}°F"
+                weather_str = get_live_weather()
+                location_str = format_location_summary()
+                _ctx_cache["weather"] = f"Current weather — {weather_str}"
+                _ctx_cache["location"] = location_str
             except Exception:
                 pass
 
@@ -2275,6 +2278,15 @@ async def voice_handler(ws: WebSocket):
                                 last_response=last_vader_response,
                                 session_summary=session_summary,
                             )
+
+                            # Activate location/weather nodes if user asked about them
+                            _user_lower = user_text.lower()
+                            if any(w in _user_lower for w in ("weather", "temperature", "rain", "sunny", "forecast", "hot", "cold", "wind")):
+                                try: await ws.send_json({"type": "node_activate", "node": "weather"})
+                                except Exception: pass
+                            if any(w in _user_lower for w in ("location", "where am i", "where are we", "my city", "near me")):
+                                try: await ws.send_json({"type": "node_activate", "node": "location"})
+                                except Exception: pass
 
                             # Check for action tags embedded in LLM response
                             clean_response, embedded_action = extract_action(response_text)
