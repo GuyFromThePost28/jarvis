@@ -56,6 +56,7 @@ from alarm_access import set_alarm, set_timer, format_alarms_summary
 from bambu_access import format_printer_status, pause_print, resume_print, stop_print
 from obsidian_access import write_memory, write_note, read_vault
 from location_access import get_location, get_live_weather, format_location_summary
+from tavily_access import format_search_result
 from dispatch_registry import DispatchRegistry
 from planner import TaskPlanner, detect_planning_mode, BYPASS_PHRASES
 
@@ -220,6 +221,11 @@ CRITICAL: When the user asks about their SCREEN, what's RUNNING, or what they're
 - [ACTION:SPOTIFY_NOW] — report what's currently playing on Spotify
 - [ACTION:SET_ALARM] time ||| label — set an alarm. "wake me at 7am" → [ACTION:SET_ALARM] 7am ||| Wake up
 - [ACTION:SET_TIMER] duration — set a countdown timer. "set a 10 minute timer" → [ACTION:SET_TIMER] 10 minutes
+- [ACTION:TAVILY_SEARCH] query — search the live web and answer verbally. Use this for ANY question that needs current or factual information: prices, news, recipes, how-to guides, sports scores, definitions, local info — anything the user would normally Google.
+  "what's the Bitcoin price" → [ACTION:TAVILY_SEARCH] Bitcoin price today
+  "how do I make carbonara" → [ACTION:TAVILY_SEARCH] how to make pasta carbonara recipe
+  "latest AI news" → [ACTION:TAVILY_SEARCH] latest artificial intelligence news today
+  IMPORTANT: Use TAVILY_SEARCH liberally. If the user asks a factual question you are not 100% certain about, search it. Do NOT answer from memory when current data matters.
 - [ACTION:BAMBU_STATUS] — check the status of the Bambu 3D printer
 - [ACTION:BAMBU_PAUSE] — pause the current Bambu print
 - [ACTION:BAMBU_RESUME] — resume a paused Bambu print
@@ -760,7 +766,7 @@ def extract_action(response: str) -> tuple[str, dict | None]:
     Returns (clean_text_for_tts, action_dict_or_none).
     """
     match = _action_re.search(
-        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|READ_VAULT|SCREEN|SPOTIFY_PLAY|SPOTIFY_PAUSE|SPOTIFY_NEXT|SPOTIFY_PREV|SPOTIFY_VOLUME|SPOTIFY_NOW|SET_ALARM|SET_TIMER|BAMBU_STATUS|BAMBU_PAUSE|BAMBU_RESUME|BAMBU_STOP)\]\s*(.*?)$',
+        r'\[ACTION:(BUILD|BROWSE|RESEARCH|OPEN_TERMINAL|PROMPT_PROJECT|ADD_TASK|ADD_NOTE|COMPLETE_TASK|REMEMBER|CREATE_NOTE|READ_NOTE|READ_VAULT|SCREEN|SPOTIFY_PLAY|SPOTIFY_PAUSE|SPOTIFY_NEXT|SPOTIFY_PREV|SPOTIFY_VOLUME|SPOTIFY_NOW|SET_ALARM|SET_TIMER|BAMBU_STATUS|BAMBU_PAUSE|BAMBU_RESUME|BAMBU_STOP|TAVILY_SEARCH)\]\s*(.*?)$',
         response, _action_re.DOTALL,
     )
     if match:
@@ -852,6 +858,17 @@ async def _bambu_action(action: str, ws, history: list, voice_state: dict):
             except Exception: pass
     except Exception as e:
         log.error(f"Bambu action error: {e}")
+
+
+async def _tavily_action(query: str, ws, history: list, voice_state: dict):
+    try:
+        msg = await format_search_result(query)
+        await _speak_and_log(msg, ws, history, voice_state)
+        if ws:
+            try: await ws.send_json({"type": "node_activate", "node": "search"})
+            except Exception: pass
+    except Exception as e:
+        log.error(f"Tavily action error: {e}")
 
 
 async def _execute_build(target: str):
@@ -2478,6 +2495,10 @@ async def voice_handler(ws: WebSocket):
                                     asyncio.create_task(_bambu_action("resume", ws, history, voice_state))
                                 elif embedded_action["action"] == "bambu_stop":
                                     asyncio.create_task(_bambu_action("stop", ws, history, voice_state))
+
+                                # --- Web Search ---
+                                elif embedded_action["action"] == "tavily_search":
+                                    asyncio.create_task(_tavily_action(embedded_action["target"].strip(), ws, history, voice_state))
 
                 # Update history
                 history.append({"role": "user", "content": user_text})

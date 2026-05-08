@@ -38,6 +38,7 @@ const NODE_INFO: Record<string, { icon: string; desc: string; color: number }> =
   obsidian:  { icon: "🔮", desc: "Obsidian vault — every memory and note Vader stores, visible as a knowledge graph.", color: 0x9b59b6 },
   location:  { icon: "📍", desc: "Live location — your current city and region via IP geolocation.", color: 0xff6600 },
   weather:   { icon: "🌤️", desc: "Live weather — current conditions, temperature, wind, and humidity.", color: 0x00ccff },
+  search:    { icon: "🔍", desc: "Tavily web search — live answers to any question from the internet.", color: 0x39ff14 },
 };
 
 function makeLabel(label: string, color: number): THREE.Sprite {
