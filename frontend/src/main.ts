@@ -10,6 +10,7 @@ import { createVoiceInput, createAudioPlayer } from "./voice";
 import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup } from "./settings";
 import { brainMap } from "./brainmap";
+import { CameraView } from "./camera";
 import "./style.css";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,10 @@ const socket = createSocket(WS_URL);
 const audioPlayer = createAudioPlayer();
 orb.setAnalyser(audioPlayer.getAnalyser());
 
+const cameraView = new CameraView((base64: string, text: string) => {
+  socket.send({ type: "camera_frame", image: base64, text });
+});
+
 function transition(newState: State) {
   if (newState === currentState) return;
   currentState = newState;
@@ -81,11 +86,21 @@ function transition(newState: State) {
 // Voice input
 // ---------------------------------------------------------------------------
 
+const LOOK_TRIGGERS = ["look", "what is", "what's this", "whats this", "see this",
+  "check this", "analyze", "identify", "tell me about", "what do you see", "examine", "show you"];
+
 const voiceInput = createVoiceInput(
   (text: string) => {
-    // Cancel any current Vader response before sending new input
     audioPlayer.stop();
-    // User spoke — send transcript
+    // If camera is open and user says a look-trigger, capture a frame
+    if (cameraView.isOpen) {
+      const lower = text.toLowerCase();
+      if (LOOK_TRIGGERS.some((t) => lower.includes(t))) {
+        cameraView.capture(text);
+        transition("thinking");
+        return;
+      }
+    }
     socket.send({ type: "transcript", text, isFinal: true });
     transition("thinking");
   },
@@ -148,6 +163,9 @@ socket.onMessage((msg) => {
   } else if (type === "memory_store") {
     orb.memorySpark();
     brainMap.onMemoryStore();
+  } else if (type === "camera_result") {
+    cameraView.zoomOut();
+    transition("idle");
   }
 });
 
@@ -179,12 +197,24 @@ ensureAudioContext();
 // UI Controls
 // ---------------------------------------------------------------------------
 
+const btnCamera = document.getElementById("btn-camera")!;
 const btnMute = document.getElementById("btn-mute")!;
 const btnMenu = document.getElementById("btn-menu")!;
 const menuDropdown = document.getElementById("menu-dropdown")!;
 const btnNeuralMap = document.getElementById("btn-neural-map")!;
 const btnRestart = document.getElementById("btn-restart")!;
 const btnFixSelf = document.getElementById("btn-fix-self")!;
+
+btnCamera.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (cameraView.isOpen) {
+    cameraView.close();
+    btnCamera.classList.remove("active");
+  } else {
+    cameraView.open();
+    btnCamera.classList.add("active");
+  }
+});
 
 btnMute.addEventListener("click", (e) => {
   e.stopPropagation();

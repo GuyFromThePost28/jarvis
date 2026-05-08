@@ -2095,6 +2095,38 @@ async def voice_handler(ws: WebSocket):
                     await ws.send_json({"type": "text", "text": response_text})
                 continue
 
+            if msg.get("type") == "camera_frame":
+                image_b64 = msg.get("image", "")
+                user_text = msg.get("text", "What do you see?").strip() or "What do you see?"
+                if image_b64 and anthropic_client:
+                    try:
+                        await ws.send_json({"type": "status", "state": "thinking"})
+                        vision_resp = await anthropic_client.messages.create(
+                            model="claude-sonnet-4-6",
+                            max_tokens=300,
+                            system=(
+                                f"You are Vader, {USER_NAME}'s dark and commanding AI assistant. "
+                                "Analyze exactly what you see in the image and answer the user's question. "
+                                "Be precise, 1-2 sentences maximum. Address the user as 'sir'. "
+                                "No markdown, no bullet points — speak naturally."
+                            ),
+                            messages=[{"role": "user", "content": [
+                                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                                {"type": "text", "text": user_text},
+                            ]}],
+                        )
+                        answer = vision_resp.content[0].text if vision_resp.content else "I cannot determine what that is, sir."
+                        audio = await synthesize_speech(strip_markdown_for_tts(answer))
+                        if audio:
+                            await ws.send_json({"type": "status", "state": "speaking"})
+                            await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": answer})
+                        else:
+                            await ws.send_json({"type": "text", "text": answer})
+                    except Exception as e:
+                        log.error(f"Camera vision error: {e}")
+                await ws.send_json({"type": "camera_result"})
+                continue
+
             if msg.get("type") != "transcript" or not msg.get("isFinal"):
                 continue
 
