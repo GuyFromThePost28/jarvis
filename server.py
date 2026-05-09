@@ -68,9 +68,9 @@ log = logging.getLogger("vader")
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-FISH_API_KEY = os.getenv("FISH_API_KEY", "")
-FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # Vader (MCU)
-FISH_API_URL = "https://api.fish.audio/v1/tts"
+CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY", "")
+CARTESIA_VOICE_ID = os.getenv("CARTESIA_VOICE_ID", "c3120a11-36bd-402c-ab4c-3890ef7fa5d5")
+CARTESIA_API_URL = "https://api.cartesia.ai/tts/bytes"
 USER_NAME = os.getenv("USER_NAME", "sir")
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -1184,27 +1184,30 @@ _last_greeting_time: float = 0
 
 
 # ---------------------------------------------------------------------------
-# TTS (Fish Audio)
+# TTS (Cartesia)
 # ---------------------------------------------------------------------------
 
 async def synthesize_speech(text: str) -> Optional[bytes]:
-    """Generate speech audio from text using Fish Audio TTS."""
-    if not FISH_API_KEY:
-        log.warning("FISH_API_KEY not set, skipping TTS")
+    """Generate speech audio from text using Cartesia TTS."""
+    if not CARTESIA_API_KEY:
+        log.warning("CARTESIA_API_KEY not set, skipping TTS")
         return None
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as http:
             response = await http.post(
-                FISH_API_URL,
+                CARTESIA_API_URL,
                 headers={
-                    "Authorization": f"Bearer {FISH_API_KEY}",
+                    "X-API-Key": CARTESIA_API_KEY,
+                    "Cartesia-Version": "2024-06-10",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "text": text,
-                    "reference_id": FISH_VOICE_ID,
-                    "format": "mp3",
+                    "model_id": "sonic-2",
+                    "transcript": text,
+                    "voice": {"mode": "id", "id": CARTESIA_VOICE_ID},
+                    "output_format": {"container": "mp3", "encoding": "mp3", "sample_rate": 44100},
+                    "language": "en",
                 },
             )
             if response.status_code == 200:
@@ -1212,7 +1215,7 @@ async def synthesize_speech(text: str) -> Optional[bytes]:
                 _append_usage_entry(0, 0, "tts")
                 return response.content
             else:
-                log.error(f"TTS error: {response.status_code}")
+                log.error(f"TTS error: {response.status_code} {response.text[:100]}")
                 return None
     except Exception as e:
         log.error(f"TTS error: {e}")
