@@ -83,6 +83,28 @@ function transition(newState: State) {
 }
 
 // ---------------------------------------------------------------------------
+// Wake word
+// ---------------------------------------------------------------------------
+
+const WAKE_WORD = "vader";
+const WAKE_TIMEOUT_MS = 20_000;
+let isAwake = false;
+let wakeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function wake() {
+  isAwake = true;
+  if (wakeTimeout) clearTimeout(wakeTimeout);
+  wakeTimeout = setTimeout(sleep, WAKE_TIMEOUT_MS);
+  transition("listening");
+}
+
+function sleep() {
+  isAwake = false;
+  if (wakeTimeout) { clearTimeout(wakeTimeout); wakeTimeout = null; }
+  transition("idle");
+}
+
+// ---------------------------------------------------------------------------
 // Voice input
 // ---------------------------------------------------------------------------
 
@@ -91,18 +113,34 @@ const LOOK_TRIGGERS = ["look", "what is", "what's this", "whats this", "see this
 
 const voiceInput = createVoiceInput(
   (text: string) => {
-    audioPlayer.stop();
-    // If camera is open and user says a look-trigger, capture a frame
-    if (cameraView.isOpen) {
-      const lower = text.toLowerCase();
-      if (LOOK_TRIGGERS.some((t) => lower.includes(t))) {
-        cameraView.capture(text);
+    const lower = text.toLowerCase().trim();
+
+    if (!isAwake) {
+      const wakeIdx = lower.indexOf(WAKE_WORD);
+      if (wakeIdx === -1) return; // dormant — ignore everything without wake word
+      wake();
+      // Extract anything said after "Vader" in the same breath
+      const afterWake = text.slice(wakeIdx + WAKE_WORD.length).replace(/^[,.\s]+/, "").trim();
+      if (afterWake.length > 2) {
+        audioPlayer.stop();
+        socket.send({ type: "transcript", text: afterWake, isFinal: true });
         transition("thinking");
-        return;
+        sleep();
       }
+      return;
+    }
+
+    // Already awake — process the request
+    audioPlayer.stop();
+    if (cameraView.isOpen && LOOK_TRIGGERS.some((t) => lower.includes(t))) {
+      cameraView.capture(text);
+      transition("thinking");
+      sleep();
+      return;
     }
     socket.send({ type: "transcript", text, isFinal: true });
     transition("thinking");
+    sleep();
   },
   (msg: string) => {
     showError(msg);
@@ -114,7 +152,7 @@ const voiceInput = createVoiceInput(
 // ---------------------------------------------------------------------------
 
 audioPlayer.onFinished(() => {
-  transition("idle");
+  sleep();
 });
 
 // ---------------------------------------------------------------------------
@@ -173,10 +211,10 @@ socket.onMessage((msg) => {
 // Kick off
 // ---------------------------------------------------------------------------
 
-// Start listening after a brief delay for the orb to render
+// Start dormant — mic runs but waits for "Vader" wake word
 setTimeout(() => {
   voiceInput.start();
-  transition("listening");
+  transition("idle");
 }, 1000);
 
 // Resume AudioContext on ANY user interaction (browser autoplay policy)
